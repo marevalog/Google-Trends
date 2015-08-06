@@ -28,7 +28,7 @@ sel<-date>="2011-01-01"
 DATA2<-DATA[sel==TRUE,]
 DATA2$timepoint<-1:length(DATA2[,1])
 names(DATA2)<-c("Y","MONTH","timepoint")
-model<-cosinor(formula=Y~timepoint,date=MONTH,data=DATA2,type="monthly",family=poisson(link = "log"))
+model<-cosinor(formula=Y~timepoint,date="MONTH",data=DATA2,type="monthly",family=poisson(link = "log"))
 
 #set up for cosinor analysis with seasonality on the month and make an ever increasing number for months since start call it timepoint
 #get column names of the sumTable
@@ -60,7 +60,7 @@ doCosinor<-function(keyword,pasteBedBugs=TRUE,sumTable,dateLimit="2011-01-01", b
   SELECTEDDATA<-DATA[sel==TRUE,]
   SELECTEDDATA$timepoint<-1:length(SELECTEDDATA[,1])
   names(SELECTEDDATA)<-c("TERM","MONTH","timepoint")
-  model<-cosinor(formula=TERM~timepoint,date=MONTH,data=SELECTEDDATA,type="monthly",family=poisson(link="log"))
+  model<-cosinor(formula=TERM~timepoint,date="MONTH",data=SELECTEDDATA,type="monthly",family=poisson(link="log"))
   								
   return(list(model=model, selData=SELECTEDDATA))
 }
@@ -303,8 +303,11 @@ plotdat <- match(alltime$Month, grabJA)
 plotdate <- which((is.na(plotdat) == FALSE))
 
 #enter the six keyterms you want
+lengthtime<-44
 keyvector <- c("exterminator", "hotels", "remedies", "city", "images", "about")
-keymat <- matrix(, nrow = 3*45, ncol = (length(keyvector)))
+keymat <- matrix(, nrow = 3*lengthtime, ncol = (length(keyvector)))
+keyslopes<-NA*1:(length(keyvector))
+keyints<-NA*1:(length(keyvector))
 
 #this saves all the necessary data vectors so we can use them to graph the plots
 for(i in 1:length(keyvector)){
@@ -314,31 +317,46 @@ for(i in 1:length(keyvector)){
   x = keyCos$selData$timepoint
   y = keyCos$selData$TERM
   z = keyCos$model$fitted.plus
-  
-  keymat[1:45,i] <- x 
-  keymat[46:90,i] <- y
-  keymat[91:135,i] <- z
+  s = keyCos$model$glm$coefficients["timepoint"]
+  ki = keyCos$model$glm$coefficients["(Intercept)"]
+  keymat[1:lengthtime,i] <- x
+  keymat[(lengthtime+1):(lengthtime*2),i] <- y
+  keymat[(lengthtime*2+1):(lengthtime*3),i] <- z
+  keyslopes[i]<-s
+  keyints[i]<-ki
 }
 
 #this will create a 3x2 set of plots for the 6 chosen search terms
-###NEED TO FIX AXES!!! (note to self) MIKE FIXED AXES BLEOW
+###NEED TO FIX AXES!!! (note to self) MIKE FIXED AXES BELOW
 #If you chose more than 6 search terms, change the numbers in par(mfrow = c(3,2))!
 #png(file="three_by_two_plot.png", width=7, height=7)
-par(mfrow=c(3,2), mai=c(.5,.3,.5,.5))  #mai lets uyou control the amount of blank space between plots see ?par
+pdf(file="three_by_two_plot_mzl.pdf", width=12, height=12)
+
+par(mfrow=c(3,2), mai=c(.3,.5,.3,.1))  #mai lets uyou control the amount of blank space between plots see ?par
+#par(mfrow=c(3,2), mar=c(5,3,2,2)+0.1)
 for(j in 1:length(keyvector)){
-  xvec <- keymat[1:45,j]
-  yvec <- keymat[46:90, j]
-  zvec <- keymat[91:135, j]
+ 
+  xvec <- keymat[1:lengthtime,j]
+  yvec <- keymat[(lengthtime+1):(lengthtime*2), j]
+  zvec <- keymat[(lengthtime*2+1):(lengthtime*3), j]
   
-  plot(xvec, yvec, xaxt = 'n', xlab = "", ylab = "Frequency", main = keyvector[j], xlim=c(0,45),ylim=c(0,400),cex.main=2)
-  lines(xvec, zvec, col = "black")
+  plot(xvec, yvec, xaxt = 'n', xlab = "", ylab = "", main = keyvector[j], xlim=c(0,lengthtime),ylim=c(0,400),cex.main=2.4,cex.axis=2,axes=T,cex=2, pch=23,bg="grey")
+  lines(xvec, zvec, col = "black",lwd=2)
+  #adding detrended line for each model as a dotted blue line
+  smoothed<-exp(keyints[j])*exp(xvec*keyslopes[j])
+  lines(xvec, smoothed,col="blue",lty="dashed",lwd=2)
   ###COMMENT LINE BELOW OUT FOR BLANK X AXIS
 #axis(side = 1, at = x[plotdate], labels = grabJA, las = 2, cex.axis = 0.85)
 #if(j==5|j==6)
 #	{
-		LABS<-c("Jan 11", "July 11", "Jan 12", "July 12", "Jan 13", "July 13", "Jan 14", "July 14" )
+        #LABS<-c("Jan 11", "July 11", "Jan 12", "July 12", "Jan 13", "July 13", "Jan 14", "July 14" )
+        LABS<-c("1/11", "7/11", "1/12", "7/12", "1/13", "7/13", "1/14", "7/14" )
 		AT<-sort(c(7,7+12*1:3, c(1,1+12*1:3)))
-			axis(side = 1, at = AT, labels = LABS, las = 1, cex.axis = 1)
+			axis(side = 1, at = AT, labels = LABS, las = 1, cex.axis = 2)
+            #LABSY<-c(0,100,200,300,400)
+            #axis(side = 2, at = LABSY, labels = LABSY, las = 1, cex.axis = 1.4,padj=0)
+
+        
 #	}
 	}
-#dev.off()
+dev.off()
