@@ -1,4 +1,6 @@
-setwd("~/Dropbox/Bed_bug_searches_project/AutomatedRetrieval")
+#setwd("~/Dropbox/Bed_bug_searches_project/AutomatedRetrieval")
+setwd("~/GitHub/Google-Trends")
+
 #!/usr/bin/Rscript
 # Makes from termsList.txt
 # a list of requests that can be handled by termsFromTxt.py
@@ -11,21 +13,21 @@ setwd("~/Dropbox/Bed_bug_searches_project/AutomatedRetrieval")
 #extended list (Autocomplete+Correlate)
 #secondaryTerms <- read.csv("termsList2.txt",header=FALSE,as.is=TRUE)[,1]
 
-secondaryTerms <- read.csv("termsList_30terms.txt",header=FALSE,as.is=TRUE)[,1]
+secondaryTerms <- read.csv("termsList.txt",header=FALSE,as.is=TRUE)[,1]
 
 #pest comparison
 #secondaryTerms <- read.csv("termsList3.txt",header=FALSE,as.is=TRUE)[,1]
 
-# folder for requests ! should only contain the request files
+# folder for requests ! This should only contain the request files
 requestsFolder <- "requestsListings"
 
-### check requests folder exists or create it
+### check if requests folder exists, or create it
 unlink(requestsFolder,recursive=TRUE,force=TRUE)
 if( ! file.exists(requestsFolder)){
   dir.create(requestsFolder)
 }
 
-# main keywords they should be combined with
+# main keywords the requests should be combined with
 mainKeyWords <- c("bed bugs") # "" means no keyword
 #referenceSearch <- "bed bugs exterminator" # "" means no reference search
 referenceSearch <- "" # "" means no reference search
