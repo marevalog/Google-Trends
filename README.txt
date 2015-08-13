@@ -15,7 +15,7 @@ To retrieve and format the google trends results:
 		* in R, `source("makeTermsList.R")`
 
 	3. Run termsFromTxt.py
-
+		* Code for Python 2 version
 		* `./termsFromTxt.py` in Linux
 
 	4. Run importTrendsResults.R
