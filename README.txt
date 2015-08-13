@@ -21,6 +21,7 @@ To retrieve and format the google trends results:
 	4. Run importTrendsResults.R
 
 		* in R, `source("importTrendsResults.R")`
+		* outTrendsFolder must be changed to folder saved from termsFromTxt.py
 
 The retrieved and formatted results will now be stored under requestResults with file name sumTable.Rda.
 
