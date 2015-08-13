@@ -1,6 +1,6 @@
 graphics.off()
 #install.packages("lubridate") 
-
+#setwd("C:/Users/Maria/Desktop/Google-Trends")
 
 # TODO: bed bugs seems to be treated as two words should not be
 # Extract from pseudo csv files from Trends the occurences
@@ -60,7 +60,7 @@ graphics.off()
 #outTrendsFolder <- "requestsResults_2014-04-18_15-29-36/"
 
 # united states, 2004-present no comparison
-outTrendsFolder <- "requestsResults_2014-08-29_13-25-26"
+outTrendsFolder <- "requestsResults_2015-08-13_13-19-41"
 
 # united states, bed bugs april 2004-sept 11 2014 no comparison
 #outTrendsFolder <- "requestsResults_2014-09-11_08-28-54_bed_bugs"
@@ -116,6 +116,9 @@ if(!usingRef){ # if not using a reference plot directly
       plot(1)
     }
   }
+
+  beginTimes <- TimeFromOutTrends(sumTable)
+  sumTable <- cbind(beginTimes,sumTable)
   # plot only the OK ones
 }
 
@@ -200,7 +203,6 @@ endCountZero <- max(which((sumTable$beginTimes<as.Date("2014-04-01"))==TRUE))
 
 #i moved up to september MIKE
 #endCountZero <- max(which((sumTable$beginTimes<as.Date("2014-09-01"))==TRUE))
-
 
 toTrashColumns <- which(apply(sumTable[beginCountZero:endCountZero,-(1:3)],
                               2,countZero)>nMaxZero)

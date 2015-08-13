@@ -4,6 +4,7 @@
 # from termsFromTxt import *
 # #  and to reload:
 # reload(termsFromTxt) ; from termsFromTxt import *
+# need pyGTrends.py in same directory to run
 
 import sys
 sys.path.append("google-trend-api")
