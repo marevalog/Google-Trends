@@ -66,6 +66,7 @@ doCosinor<-function(keyword,pasteBedBugs=TRUE,sumTable,dateLimit="2011-01-01", b
 }
 
 #KEY OUTPUTS
+## Not working properly
 getEstimates<-function(model){
 ## AIC<-model[[2]][5]
 ## AIC not being used 
