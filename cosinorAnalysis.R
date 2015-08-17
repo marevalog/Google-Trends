@@ -70,7 +70,7 @@ doCosinor<-function(keyword,pasteBedBugs=TRUE,sumTable,dateLimit="2011-01-01", b
 getEstimates<-function(model){
 ## AIC<-model[[2]][5]
 ## AIC not being used 
-  COEF<-model[[2]][12]
+  COEF<-summary(model$glm)[12]
   COEF2<-as.data.frame(COEF)
   ESTTREND<-COEF2[2,1]
   PTREND<-COEF2[2,4]
