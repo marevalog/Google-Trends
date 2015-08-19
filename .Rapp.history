@@ -1,0 +1,1438 @@
+load("/Users/mzlevy/Google-Trends-Maria/sumTable.Rda")
+# use simple fake survey classifying all the terms by Daniel#
+# in Prevention, Identification, Control (1,2,3 and 0 for none or hard ties)#
+graphics.off()#
+nRepet <- 1000 # the number of repetitions in bootstrap#
+#### import the class corresponding to each term#
+classes <- read.csv("extendedtermscategory.csv")#
+mainTerms <- c("bed bugs")#
+intentions <- c("?","Don't have","Might","Have")#
+#### load the trends per term#
+#### this name may change according to your naming convention#
+#### this follows our current naming convention#
+load("requestResults/sumTable.Rda")#
+termsFound <- colnames(sumTable)#
+for(term in mainTerms){#
+  termsFound <- gsub(paste0("^",mainTerms),"",termsFound)#
+  termsFound <- gsub("^ ","",termsFound) # removing initial " "#
+  termsFound <- gsub(" $","",termsFound) # removing trailing " "#
+}#
+#### check the terms match#
+#### transform everything to lower case#
+colnames(sumTable) <- tolower(colnames(sumTable))#
+classes$term<- tolower(classes$term)#
+##### match terms in dataSurvey to columns in sumTable#
+dataSumTableInSurvey <- match(termsFound,classes$term)#
+Standardize <- function(vals){#
+  m <- mean(vals,na.rm=TRUE)#
+  s <- sd(vals,na.rm=TRUE)#
+  std <- (vals - m)/s#
+  return(std)#
+}#
+classesNums<- levels(as.factor(classes$class))#
+par(mfcol=c(3,length(classesNums)))#
+intentsInSumTab <- list()#
+for(intent in classesNums){#
+  # isolate the trends to plot#
+  intentInSurvey <- which(classes$class == intent)#
+  intentFoundInSumTab <- intersect(intentInSurvey,dataSumTableInSurvey)#
+  intentInSumTab <- match(intentFoundInSumTab,dataSumTableInSurvey)#
+  toPlot <- sumTable[,intentInSumTab]#
+  intentsInSumTab[[intent]] <- intentInSumTab#
+  # plot#
+  plot(range(sumTable[,1]),c(0,500),type="n",#
+       xlab="Date (months)",ylab="Searches per month",#
+       main=intentions[as.numeric(as.character(intent))+1])#
+  for(iTerm in 1:dim(toPlot)[2]){#
+    lines(sumTable[,1],toPlot[,iTerm])#
+  }#
+  # normalize terms#
+  toPlotNorm <- apply(toPlot,2,Standardize)#
+  # plot normalized#
+  plot(range(sumTable[,1]),c(-2,8),type="n",xlab="Date (months)",ylab="Searches per month")#
+  for(iTerm in 1:dim(toPlot)[2]){#
+    lines(sumTable[,1],toPlotNorm[,iTerm])#
+  }#
+  # smooth# smooth#
+  nF<- 11#
+  toPlotSmooth <- apply(toPlotNorm,2,filter,rep(1/nF,nF))#
+  # plot smoothed#
+  plot(range(sumTable[,1]),c(-2,3),type="n",xlab="Date (months)",ylab="Searches per month")#
+  for(iTerm in 1:dim(toPlot)[2]){#
+    lines(sumTable[,1],toPlotSmooth[,iTerm])#
+  }#
+} #
+#==========================#
+# Select terms for survey#
+#==========================#
+# At least n times non-zero search values#
+nMinNonZero <- 10#
+countNonZero <- function(vect){#
+    return(length(which(as.numeric(vect)!=0)))#
+}#
+toKeepColNums <- which(apply(sumTable[,-1],2,countNonZero)>=nMinNonZero)#
+print(names(sumTable[,toKeepColNums]))#
+toTrashColNums <- which(apply(sumTable[,-1],2,countNonZero)>=nMinNonZero)#
+windows()#
+par(mfrow=c(4,5))#
+for(i in (which(test==0)[-1]+1)){#
+    plot(sumTable[,1],sumTable[,i],xlab="time",ylab=names(sumTable)[i])#
+    lines(sumTable[,1],sumTable[,"exterminator"],col="blue")#
+}#
+countZero <- function(vect){#
+  return(length(which(as.numeric(vect)==0)))#
+}#
+nMaxZero <- 20#
+beginCountZero <- min(which((sumTable$beginTimes>=as.Date("2011-01-01"))==TRUE))#
+endCountZero <- max(which((sumTable$beginTimes<as.Date("2014-01-01"))==TRUE))#
+toTrashColumns <- which(apply(sumTable[beginCountZero:endCountZero,-1],#
+                              2,countZero)>nMaxZero)#
+#==========================#
+# statistical analysis#
+#==========================#
+# functions to ease the retrieval of slopes#
+GetSlope <- function(i,sumTable){#
+  s <- lm(sumTable[,i]~sumTable[,1])$coeff[2]#
+  names(s) <- colnames(sumTable)[i]#
+  return(s)#
+}#
+GetSlopes <- function(sumTable){#
+  slopes <- sapply(2:dim(sumTable)[2],GetSlope,sumTable,simplify=TRUE)#
+}#
+# fns for bootstrap on the slopes to know if any significant#
+library(boot)#
+GetMean<-function(dat,i,...){#
+  avg <- mean(dat[i])#
+  return(avg)#
+}#
+CustomBoot <- function(vect){#
+  if(length(vect)>0){#
+    outBoot <- boot(data=as.vector(vect),statistic=GetMean,R=nRepet,stype="i")#
+    CI<-boot.ci(outBoot,type=c("perc","bca"))#
+    out<-c(outBoot$t0,CI$percent[4:5],CI$bca[4:5])#
+  }else{#
+    out <-rep(NA,5)#
+  }#
+  return(out)#
+}#
+# just get the overall slope for each curve#
+overallSlopes <- GetSlopes(sumTable)#
+# get the slopes since 2011-01-01 and without the final 0#
+afterSpike <- which(sumTable[,1] >= as.Date("2011-01-01") & sumTable[,1] < as.Date("2014-01-01"))#
+afterSpikeSlopes <- GetSlopes(sumTable[afterSpike,])#
+# limit to terms that are significantly not null #
+countZero <- function(vect){#
+  length(which(as.numeric(as.character(vect)) == 0))#
+}#
+# non null just after spike#
+nZeros <- apply(sumTable[afterSpike,],2,countZero)#
+# # non null in since 2008#
+# after2008 <- which(sumTable[,1] >= as.Date("2008-01-01") & sumTable[,1] < as.Date("2014-01-01"))#
+# nZeros <- apply(sumTable[after2008,],2,countZero)#
+#=> only 5 terms satisfy this criterium...#
+iBigTerms <- which(nZeros<10)#
+# average slope for each intent with bootstrap#
+avgSlopePostSpike <- list()#
+avgSlope <- list()#
+for(intent in classesNums){#
+  iIntent <- intentsInSumTab[[intent]]-1#
+  toKeep <- intersect(iIntent,iBigTerms)#
+  avgSlope[[intent]] <- CustomBoot(overallSlopes[toKeep])#
+  avgSlopePostSpike[[intent]] <- CustomBoot(afterSpikeSlopes[toKeep])#
+}#
+# simplify to an array the initial list#
+avgSlope <- simplify2array(avgSlope)#
+avgSlopePostSpike <- simplify2array(avgSlopePostSpike)#
+# plot by order of decreasing slope post spike#
+nL <- 4#
+nC <- 7#
+iCount <-1#
+for(iTerm in intersect(order(afterSpikeSlopes),iBigTerms-1)){#
+  if((iCount-1) %% (nL*nC)==0){#
+    dev.new()#
+    par(mfrow=c(nL,nC))#
+  }#
+  plot(sumTable[,1],sumTable[,iTerm+1],ylab=colnames(sumTable[iTerm+1]))#
+  iCount <- iCount +1#
+}#
+# permutation test on intentions: is the slope for each intention significantly different from the expected#
+# if randomly drawn from the available terms?#
+#--------------------------#
+# sample a thousand of distributions in the three/four groups#
+#   -> reorder the intentions but keep the labels#
+#--------------------------#
+# sample#
+avgS <- list()#
+avgSASS <- list()#
+for(i in 1:nRepet){#
+  scrambled<-sample(length(afterSpikeSlopes))#
+  sOA <- overallSlopes[scrambled]#
+  sAS <- afterSpikeSlopes[scrambled]#
+  for(intent in classesNums){#
+    iIntent <- intentsInSumTab[[intent]]-1#
+    toKeep <- intersect(iIntent,iBigTerms)#
+    avgS[[intent]][i] <- mean(sOA[toKeep])#
+    avgSASS[[intent]][i] <- mean(sAS[toKeep])#
+  }#
+}#
+# summarize as quantiles#
+qSlopes<-mat.or.vec(length(classesNums),2)#
+qSASS<-mat.or.vec(length(classesNums),2)#
+for(intent in classesNums){#
+  qSlopes[as.numeric(intent)+1,] <- quantile(avgS[[intent]],prob=c(0.025,0.975))#
+  qSASS[as.numeric(intent)+1,] <- quantile(avgSASS[[intent]],prob=c(0.025,0.975))#
+}#
+# barplot all the CI based measures together#
+# barplot with confidence intervals#
+barplot.ci<-function(y,yminus,ymax,ylim=c(min(y,yminus,ymax),max(y,yminus,ymax)),...){#
+  xbar<-barplot(y,ylim=ylim,...)#
+  errbar(xbar,y,yminus,ymax,add=TRUE,type="n")#
+  # may want to replace it with plotCI#
+  return(xbar)#
+}#
+dev.new()#
+par(mfcol=c(2,3))#
+barplot.ci(avgSlope[1,],avgSlope[2,],avgSlope[3,],main="Overall slope\nboot perc")#
+barplot.ci(avgSlope[1,],avgSlope[4,],avgSlope[5,],main="Overall slope\nboot bca")#
+barplot.ci(avgSlopePostSpike[1,],avgSlopePostSpike[2,],avgSlopePostSpike[3,],main="Post spike slope\nboot perc")#
+barplot.ci(avgSlopePostSpike[1,],avgSlopePostSpike[4,],avgSlopePostSpike[5,],main="Post spike slope\nboot bca")#
+# plot sampled versus observed#
+barplot.ci(avgSlope[1,],qSlopes[,1],qSlopes[,2],main="Overall slope\nresample null")#
+abline(h=mean(overallSlopes))#
+barplot.ci(avgSlopePostSpike[1,],qSASS[,1],qSASS[,2],main="Post spike slope\nresample null")#
+abline(h=mean(afterSpikeSlopes))
+intentInSurvey <- which(classes$class == intent)#
+  intentFoundInSumTab <- intersect(intentInSurvey,dataSumTableInSurvey)#
+  intentInSumTab <- match(intentFoundInSumTab,dataSumTableInSurvey)#
+  toPlot <- sumTable[,intentInSumTab]#
+  intentsInSumTab[[intent]] <- intentInSumTab
+#==========================#
+# statistical analysis#
+#==========================#
+# functions to ease the retrieval of slopes#
+GetSlope <- function(i,sumTable){#
+  s <- lm(sumTable[,i]~sumTable[,1])$coeff[2]#
+  names(s) <- colnames(sumTable)[i]#
+  return(s)#
+}#
+GetSlopes <- function(sumTable){#
+  slopes <- sapply(2:dim(sumTable)[2],GetSlope,sumTable,simplify=TRUE)#
+}#
+# fns for bootstrap on the slopes to know if any significant#
+library(boot)#
+GetMean<-function(dat,i,...){#
+  avg <- mean(dat[i])#
+  return(avg)#
+}#
+CustomBoot <- function(vect){#
+  if(length(vect)>0){#
+    outBoot <- boot(data=as.vector(vect),statistic=GetMean,R=nRepet,stype="i")#
+    CI<-boot.ci(outBoot,type=c("perc","bca"))#
+    out<-c(outBoot$t0,CI$percent[4:5],CI$bca[4:5])#
+  }else{#
+    out <-rep(NA,5)#
+  }#
+  return(out)#
+}#
+# just get the overall slope for each curve#
+overallSlopes <- GetSlopes(sumTable)#
+# get the slopes since 2011-01-01 and without the final 0#
+afterSpike <- which(sumTable[,1] >= as.Date("2011-01-01") & sumTable[,1] < as.Date("2014-01-01"))#
+afterSpikeSlopes <- GetSlopes(sumTable[afterSpike,])#
+# limit to terms that are significantly not null #
+countZero <- function(vect){#
+  length(which(as.numeric(as.character(vect)) == 0))#
+}#
+# non null just after spike#
+nZeros <- apply(sumTable[afterSpike,],2,countZero)#
+# # non null in since 2008#
+# after2008 <- which(sumTable[,1] >= as.Date("2008-01-01") & sumTable[,1] < as.Date("2014-01-01"))#
+# nZeros <- apply(sumTable[after2008,],2,countZero)#
+#=> only 5 terms satisfy this criterium...#
+iBigTerms <- which(nZeros<10)#
+# average slope for each intent with bootstrap#
+avgSlopePostSpike <- list()#
+avgSlope <- list()#
+for(intent in classesNums){#
+  iIntent <- intentsInSumTab[[intent]]-1#
+  toKeep <- intersect(iIntent,iBigTerms)#
+  avgSlope[[intent]] <- CustomBoot(overallSlopes[toKeep])#
+  avgSlopePostSpike[[intent]] <- CustomBoot(afterSpikeSlopes[toKeep])#
+}#
+# simplify to an array the initial list#
+avgSlope <- simplify2array(avgSlope)#
+avgSlopePostSpike <- simplify2array(avgSlopePostSpike)#
+# plot by order of decreasing slope post spike#
+nL <- 4#
+nC <- 7#
+iCount <-1#
+for(iTerm in intersect(order(afterSpikeSlopes),iBigTerms-1)){#
+  if((iCount-1) %% (nL*nC)==0){#
+    dev.new()#
+    par(mfrow=c(nL,nC))#
+  }#
+  plot(sumTable[,1],sumTable[,iTerm+1],ylab=colnames(sumTable[iTerm+1]))#
+  iCount <- iCount +1#
+}
+# permutation test on intentions: is the slope for each intention significantly different from the expected#
+# if randomly drawn from the available terms?#
+#--------------------------#
+# sample a thousand of distributions in the three/four groups#
+#   -> reorder the intentions but keep the labels#
+#--------------------------#
+# sample#
+avgS <- list()#
+avgSASS <- list()#
+for(i in 1:nRepet){#
+  scrambled<-sample(length(afterSpikeSlopes))#
+  sOA <- overallSlopes[scrambled]#
+  sAS <- afterSpikeSlopes[scrambled]#
+  for(intent in classesNums){#
+    iIntent <- intentsInSumTab[[intent]]-1#
+    toKeep <- intersect(iIntent,iBigTerms)#
+    avgS[[intent]][i] <- mean(sOA[toKeep])#
+    avgSASS[[intent]][i] <- mean(sAS[toKeep])#
+  }#
+}#
+# summarize as quantiles#
+qSlopes<-mat.or.vec(length(classesNums),2)#
+qSASS<-mat.or.vec(length(classesNums),2)#
+for(intent in classesNums){#
+  qSlopes[as.numeric(intent)+1,] <- quantile(avgS[[intent]],prob=c(0.025,0.975))#
+  qSASS[as.numeric(intent)+1,] <- quantile(avgSASS[[intent]],prob=c(0.025,0.975))#
+}#
+# barplot all the CI based measures together#
+# barplot with confidence intervals#
+barplot.ci<-function(y,yminus,ymax,ylim=c(min(y,yminus,ymax),max(y,yminus,ymax)),...){#
+  xbar<-barplot(y,ylim=ylim,...)#
+  errbar(xbar,y,yminus,ymax,add=TRUE,type="n")#
+  # may want to replace it with plotCI#
+  return(xbar)#
+}
+dev.new()#
+par(mfcol=c(2,3))#
+barplot.ci(avgSlope[1,],avgSlope[2,],avgSlope[3,],main="Overall slope\nboot perc")#
+barplot.ci(avgSlope[1,],avgSlope[4,],avgSlope[5,],main="Overall slope\nboot bca")#
+barplot.ci(avgSlopePostSpike[1,],avgSlopePostSpike[2,],avgSlopePostSpike[3,],main="Post spike slope\nboot perc")#
+barplot.ci(avgSlopePostSpike[1,],avgSlopePostSpike[4,],avgSlopePostSpike[5,],main="Post spike slope\nboot bca")
+# plot sampled versus observed#
+barplot.ci(avgSlope[1,],qSlopes[,1],qSlopes[,2],main="Overall slope\nresample null")#
+abline(h=mean(overallSlopes))#
+barplot.ci(avgSlopePostSpike[1,],qSASS[,1],qSASS[,2],main="Post spike slope\nresample null")#
+abline(h=mean(afterSpikeSlopes))
+load("/Users/mzlevy/Google-Trends-Maria/sumTable.Rda")
+load("requestResults/sumTable.Rda")#
+#the data is by month, and can be seen if you do edit(sumTable)#
+#make the dates work in R#
+#create a month and year variable#
+bedbugTerm = "bed bugs"#
+date<-as.Date(sumTable$Month,format='%y%m%d')#
+M<-as.numeric(factor(format(date,'%m')))#
+Year<-as.numeric(factor(format(date,'%y')))#
+#set term to one of the columns#
+term<-sumTable[,15]#
+#create a dataframe with Y and M#
+DATA<-data.frame(term,M)#
+#limit it to after january 2011#
+sel<-date>="2011-01-01"#
+DATA2<-DATA[sel==TRUE,]#
+DATA2$timepoint<-1:length(DATA2[,1])#
+names(DATA2)<-c("Y","MONTH","timepoint")#
+model<-cosinor(formula=Y~timepoint,date="MONTH",data=DATA2,type="monthly",family=poisson(link = "log"))#
+#set up for cosinor analysis with seasonality on the month and make an ever increasing number for months since start call it timepoint#
+#get column names of the sumTable#
+COLNAMES<-colnames(sumTable)#
+# COSINOR #
+doCosinor<-function(keyword,pasteBedBugs=TRUE,sumTable,dateLimit="2011-01-01", bedbugTerm="bed bugs"){#
+  COLNAMES<-colnames(sumTable)#
+  toSearch<-keyword#
+  if(pasteBedBugs==TRUE){#
+  	toSearch<-paste(bedbugTerm,keyword)#
+  }#
+  COLNUM<-which(COLNAMES==toSearch)#
+  if(length(COLNUM) == 0)#
+  	stop("The specified keyword doesn't exist. Try again.")#
+  date<-as.Date(sumTable$Month,format='%y%m%d')#
+  M<-as.numeric(factor(format(date,'%m')))#
+  Year<-as.numeric(factor(format(date,'%y')))#
+  #set the term being measured to one of the columns#
+  term<-sumTable[,COLNUM]#
+  #create a dataframe with term and M#
+  DATA<-data.frame(term,M)#
+  #limit it to after january 2011#
+  sel<-date>=dateLimit#
+  SELECTEDDATA<-DATA[sel==TRUE,]#
+  SELECTEDDATA$timepoint<-1:length(SELECTEDDATA[,1])#
+  names(SELECTEDDATA)<-c("TERM","MONTH","timepoint")#
+  model<-cosinor(formula=TERM~timepoint,date="MONTH",data=SELECTEDDATA,type="monthly",family=poisson(link="log"))#
+  return(list(model=model, selData=SELECTEDDATA))#
+}#
+#KEY OUTPUTS#
+## Not working properly#
+getEstimates<-function(model){#
+## AIC<-model[[2]][5]#
+## AIC not being used #
+  COEF<-model[[2]][12]#
+  COEF2<-as.data.frame(COEF)#
+  ESTTREND<-COEF2[2,1]#
+  PTREND<-COEF2[2,4]#
+  STDERR<-COEF2[2,3]#
+  return(c(ESTTREND, PTREND, STDERR))#
+}#
+#this will make a basic plot #
+plotCosinor<-function(model, selData){#
+  Y<-selData$Y#
+  MONTH<-selData$MONTH#
+  EST<-model$fitted.plus#
+  plot(Y)#
+  lines(EST)#
+  barplot(Y,space=0,names.arg=MONTH)#
+  lines(EST)#
+}#
+#this function will loop through the table#
+#and compute the p-values and models for every term#
+computeTable<-function(sumTable, bedbugTerm="bed bugs"){#
+  termCols<-which(grepl(bedbugTerm,colnames(sumTable)))#
+  savedModels<-list()#
+  termEstimates<-data.frame()	#
+  for(word in colnames(sumTable)[termCols]){#
+  	print(word)#
+  	savedModels[[word]]<-doCosinor(word,pasteBedBugs=FALSE,sumTable, bedbugTerm=bedbugTerm)#
+  	termEstimates<-rbind(termEstimates, getEstimates(savedModels[[word]]$model))#
+  }#
+  termEstimates <- as.matrix(termEstimates)#
+  colnames(termEstimates) <- c("estimatedTrend", "pValue", "stdError")#
+  rownames(termEstimates) <- colnames(sumTable)[termCols]#
+  return(list(savedModels=savedModels,termEstimates=termEstimates))#
+}#
+#save output--check the getEstimates STDERR looks like its the wrong column #
+TRENDESTIMATES<-computeTable(sumTable, bedbugTerm=bedbugTerm)#
+TRENDESTIMATES$termEstimates#
+#pull in the survey#
+dat<-read.csv("Final_search_term_data.csv")#
+#get rid of blanks at end#
+dat1<-dat[-c(1:3)]#
+dat1<-dat[1:128,c(3:34)]#
+dat1<-dat[1:128,c(1:34)]#
+terms<-names(dat1)#
+terms<-terms[-c(1:4)]#
+##Note changing everything that was 1 and 3 etc to 999 manually)#
+#drop respondants who had 1 zero or 1 unclear response#
+isbad<-dat1[-c(1:4)]==0 | dat1[-c(1:4)]==999#
+numbad<-rowSums(isbad)#
+todrop<-which(numbad>0)  #lines needing dropping#
+dropUser<-dat$User[todrop]#
+droplist<-unique(dropUser)  #will drop 19#
+#drop others who visually saw had all 1s or all 4s etc#
+allbad<-c(13,25)#
+droplist<-c(droplist,allbad)#
+notdrop<-setdiff(1:64,droplist)#
+#makes dat2 dropping all the bad apples#
+dat2 <- dat1#
+for (i in droplist){#
+	dat2<- subset(dat2, dat2$User != i)#
+}#
+#create separate datasets for haves and havenots#
+#keeps 43 participants#
+nothave<-dat2[which(dat2$Have.==0),5:dim(dat2)[2]]#
+have<-dat2[which(dat2$Have.==1),5:dim(dat2)[2]]#
+#New normalization (have-not have)#
+norm<-have-nothave#
+final<-apply(norm,2,mean)#
+sort(final)#
+#===============Tabel 1 #########################
+#meansd<-function(x){#
+#	temp<-mean(x)#
+#	temp2<-sd(x)#
+#	return(c(temp,temp2))#
+#}#
+#table<-apply(have,2,meansd)#
+#sum(have$Symptoms==i)#
+TABLE<-function(x)#
+{#
+	temp<-matrix(NA,30,4)#
+	for(i in 1:4)#
+	{#
+		for (j in 1:30)#
+		{#
+			temp[j,i]<-sum(x[,j]==i)#
+		}#
+	}#
+	return(temp)#
+}#
+THAVE<-TABLE(have)#
+TNOTHAVE<-TABLE(nothave)#
+TABLEALL<-data.frame(names(final), THAVE,TNOTHAVE)#
+names(TABLEALL)<-c("Term",1,2,3,4,1,2,3,4)#
+write.csv(TABLEALL,"TABLEALL.csv")#
+which(names(final)=="Itch")#
+#merge CAREFUL DOUBLE CHECK survey with trends #
+if (bedbugTerm=="bedbugs"){#
+	todrop<-which(names(final)=="Itch")#
+	final<-final[-todrop]#
+	}#
+MERGED<-data.frame(final,TRENDESTIMATES$termEstimates)#
+plot(MERGED$estimatedTrend,MERGED$final,)#
+plot(rank(MERGED$final),rank(MERGED$estimatedTrend))#
+#correlation test#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="spearman")  #doesnt work due to ties#
+#Kendalls tau-b is ok with ties; theres a warning on the output, but I think it can be ignored. #
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall")  #this outputs the tau-b which does work with ties. p-value might be not quite perfect.#
+#the alternative = "greater" is because were doing a one-sided test, we only are looking for a positive association#
+#this is the same as reporting the above with a cutoff of p<.10 though may be easier for readers to digest as people are dumb about pvalues#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall", alternative = "greater")  #
+#plot with terms #
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+text(MERGED$estimatedTrend,MERGED$final,labels=names(final),cex=1/1.4)#
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+jittered<-MERGED$final#
+jittered[13]<-MERGED$final[13]-.025#
+text(MERGED$estimatedTrend,jittered,labels=names(final),cex=1/1.4)#
+#fix names for plot#
+NAMES<-names(final)#
+#alternative lets you identify just some terms, or all of them and avoid overlap--it puts term where you click#
+plot(MERGED$estimatedTrend,MERGED$final,cex=.3,col="grey",xlab="Google Trend", ylab="Interview Score")#
+identify(MERGED$estimatedTrend,MERGED$final,labels=terms)#
+#Michelle's code to get the amplitude & phase along with other parameters#
+getAllPara <- function(keyword){#
+  keyterm <- doCosinor(keyword, pasteBedBugs = TRUE, sumTable, dateLimit = "2011-01-01")#
+  info <- summary(keyterm$model)#
+  keyamp <- info$amp#
+  keyphase <- info$phase#
+  keyintercept <- keyterm$model$glm$coefficients["(Intercept)"]#
+  keytimepoint <- keyterm$model$glm$coefficients["timepoint"]#
+  keycosw <- keyterm$model$glm$coefficients["cosw"]#
+  keysinw <- keyterm$model$glm$coefficients["sinw"]#
+  keylow <- summary(keyterm$model)$lphase#
+  keyAIC <- keyterm$model[[2]]$aic#
+  keyinfo <- c(keyamp, keyphase, keylow, keycosw, keysinw, keytimepoint, keyintercept, keyAIC)#
+  return(keyinfo)#
+}#
+#put parameters into matrix #
+termlist <- strsplit(COLNAMES[-1], " "); termmat <- matrix(,nrow = 30, ncol = 1)#
+for(j in 1:length(COLNAMES[-1])){#
+  termmat[j, 1] <- paste((termlist[[j]])[-(1:2)], collapse = " ")#
+}#
+allterms <- as.character(termmat)#
+para <- c("terms", "amplitude", "phase", "lowpt","cosw", "sinw", "timepoint", "intercept", #
+          "AIC", "est A", "est P")#
+paramat <- matrix(, nrow = 30, ncol = 11)#
+colnames(paramat) <- para#
+paramat[,1] <- allterms#
+for(i in 1:30){#
+  coinf <- getAllPara(paramat[i,1])#
+  coinfmat <- as.matrix(coinf)#
+  paramat[i, 2] <- round(as.numeric(coinfmat[1,1]), digits = 4) #adding amplitude#
+  paramat[i, 3] <- coinfmat[2,1] #adding phase#
+  paramat[i, 4] <- coinfmat[3,1] #adding low point#
+  paramat[i, 5] <- round(as.numeric(coinfmat[4,1]), digits = 4) #adding cosw#
+  paramat[i, 6] <- round(as.numeric(coinfmat[5,1]), digits = 4) #adding sinw#
+  paramat[i, 7] <- round(as.numeric(coinfmat[6,1]), digits = 4) #adding timepoint#
+  paramat[i, 8] <- round(as.numeric(coinfmat[7,1]), digits = 4) #adding intercept#
+  paramat[i, 9] <- round(as.numeric(coinfmat[8,1]), digits = 4) #adding AIC #
+}#
+#in case the estimated amplitudes and phases are also wanted#
+for(i in 1:30){#
+  c <- as.numeric(paramat[i, 5]) #cosw#
+  s <- as.numeric(paramat[i, 6]) #sinw#
+  paramat[i,10] <- round(sqrt((c^2) + (s^2)), digits = 4) #estimating amplitude#
+  estPhase = numeric()#
+  estPhase[i] <- if(c >= 0){  #
+    atan(s/c)#
+  } else {#
+    if (c < 0 & s > 0){#
+      atan(s/c) + pi#
+    } else {#
+      if (c < 0 & s > 0){#
+        atan(s/c) - pi#
+      } else {#
+        (-pi)/6     #I wasn't sure if the first condition also implied that s < 0. #
+      }#
+    }#
+  }#
+  #since phase is on radians scale, transforming to time scale for monthly data#
+  #NOTE: if estP = 0, then conditions for it were not met! See above comment about condition.#
+  paramat[i,11] <- round(12*(estPhase[i]/(2*pi)) + 1, digits = 4)#
+}#
+#View(paramat) #uncomment to see the full matrix of parameters#
+#Code to graph for publication#
+pubtimes <- which(sumTable$Month >= "2011-01-01")#
+pubTable <- sumTable[pubtimes, ] #restricting data to after 2011#
+alltime <- merge(DATA2, pubTable, by = c("row.names")) #merging two data sets so I can get the correct dates#
+alltime <- alltime[,-c(1:2)] #getting rid of unneeded columns#
+alltime <- as.Date(alltime$Month)#
+grabJA <- subset(alltime$Month, format.Date(alltime$Month, "%m")=="01" | format.Date(alltime$Month, "%m")=="08")#
+grabJA <- sort(grabJA, by = "%y")#
+plotdat <- match(alltime$Month, grabJA)#
+plotdate <- which((is.na(plotdat) == FALSE))#
+#enter the six keyterms you want#
+lengthtime<-44#
+keyvector <- c("exterminator", "hotels", "remedies", "city", "images", "about")#
+keymat <- matrix(, nrow = 3*lengthtime, ncol = (length(keyvector)))#
+keyslopes<-NA*1:(length(keyvector))#
+keyints<-NA*1:(length(keyvector))#
+#this saves all the necessary data vectors so we can use them to graph the plots#
+for(i in 1:length(keyvector)){#
+  colnames(keymat) <- keyvector#
+  keyCos <- doCosinor(keyvector[i], pasteBedBugs = TRUE, sumTable, dateLimit = "2011-01-01")#
+  x = keyCos$selData$timepoint#
+  y = keyCos$selData$TERM#
+  z = keyCos$model$fitted.plus#
+  s = keyCos$model$glm$coefficients["timepoint"]#
+  ki = keyCos$model$glm$coefficients["(Intercept)"]#
+  keymat[1:lengthtime,i] <- x#
+  keymat[(lengthtime+1):(lengthtime*2),i] <- y#
+  keymat[(lengthtime*2+1):(lengthtime*3),i] <- z#
+  keyslopes[i]<-s#
+  keyints[i]<-ki#
+}
+MERGED
+library(season)
+#make the dates work in R#
+#create a month and year variable#
+bedbugTerm = "bed bugs"#
+date<-as.Date(sumTable$Month,format='%y%m%d')#
+M<-as.numeric(factor(format(date,'%m')))#
+Year<-as.numeric(factor(format(date,'%y')))#
+#set term to one of the columns#
+term<-sumTable[,15]#
+#create a dataframe with Y and M#
+DATA<-data.frame(term,M)#
+#limit it to after january 2011#
+sel<-date>="2011-01-01"#
+DATA2<-DATA[sel==TRUE,]#
+DATA2$timepoint<-1:length(DATA2[,1])#
+names(DATA2)<-c("Y","MONTH","timepoint")#
+model<-cosinor(formula=Y~timepoint,date="MONTH",data=DATA2,type="monthly",family=poisson(link = "log"))
+COLNAMES<-colnames(sumTable)#
+# COSINOR #
+doCosinor<-function(keyword,pasteBedBugs=TRUE,sumTable,dateLimit="2011-01-01", bedbugTerm="bed bugs"){#
+  COLNAMES<-colnames(sumTable)#
+  toSearch<-keyword#
+  if(pasteBedBugs==TRUE){#
+  	toSearch<-paste(bedbugTerm,keyword)#
+  }
+COLNUM<-which(COLNAMES==toSearch)#
+  if(length(COLNUM) == 0)#
+  	stop("The specified keyword doesn't exist. Try again.")#
+  date<-as.Date(sumTable$Month,format='%y%m%d')#
+  M<-as.numeric(factor(format(date,'%m')))#
+  Year<-as.numeric(factor(format(date,'%y')))#
+  #set the term being measured to one of the columns#
+  term<-sumTable[,COLNUM]#
+  #create a dataframe with term and M#
+  DATA<-data.frame(term,M)#
+  #limit it to after january 2011#
+  sel<-date>=dateLimit#
+  SELECTEDDATA<-DATA[sel==TRUE,]#
+  SELECTEDDATA$timepoint<-1:length(SELECTEDDATA[,1])#
+  names(SELECTEDDATA)<-c("TERM","MONTH","timepoint")#
+  model<-cosinor(formula=TERM~timepoint,date="MONTH",data=SELECTEDDATA,type="monthly",family=poisson(link="log"))#
+  return(list(model=model, selData=SELECTEDDATA))#
+}
+#KEY OUTPUTS#
+## Not working properly#
+getEstimates<-function(model){#
+## AIC<-model[[2]][5]#
+## AIC not being used #
+  COEF<-model[[2]][12]#
+  COEF2<-as.data.frame(COEF)#
+  ESTTREND<-COEF2[2,1]#
+  PTREND<-COEF2[2,4]#
+  STDERR<-COEF2[2,3]#
+  return(c(ESTTREND, PTREND, STDERR))#
+}#
+#this will make a basic plot #
+plotCosinor<-function(model, selData){#
+  Y<-selData$Y#
+  MONTH<-selData$MONTH#
+  EST<-model$fitted.plus#
+  plot(Y)#
+  lines(EST)#
+  barplot(Y,space=0,names.arg=MONTH)#
+  lines(EST)#
+}
+#this function will loop through the table#
+#and compute the p-values and models for every term#
+computeTable<-function(sumTable, bedbugTerm="bed bugs"){#
+  termCols<-which(grepl(bedbugTerm,colnames(sumTable)))#
+  savedModels<-list()#
+  termEstimates<-data.frame()	#
+  for(word in colnames(sumTable)[termCols]){#
+  	print(word)#
+  	savedModels[[word]]<-doCosinor(word,pasteBedBugs=FALSE,sumTable, bedbugTerm=bedbugTerm)#
+  	termEstimates<-rbind(termEstimates, getEstimates(savedModels[[word]]$model))#
+  }#
+  termEstimates <- as.matrix(termEstimates)#
+  colnames(termEstimates) <- c("estimatedTrend", "pValue", "stdError")#
+  rownames(termEstimates) <- colnames(sumTable)[termCols]#
+  return(list(savedModels=savedModels,termEstimates=termEstimates))#
+}
+TRENDESTIMATES<-computeTable(sumTable, bedbugTerm=bedbugTerm)#
+TRENDESTIMATES$termEstimates
+computeTable
+doCosinor
+word
+word<-"exterminator"
+print(word)#
+  	savedModels[[word]]<-doCosinor(word,pasteBedBugs=FALSE,sumTable, bedbugTerm=bedbugTerm)
+colnames(sumTable)[termCols])
+colnames(sumTable)[termCols])
+termCols<-which(grepl(bedbugTerm,colnames(sumTable)))#
+  savedModels<-list()#
+  termEstimates<-data.frame()
+termEstimates
+colnames(sumTable)
+termCols
+for(word in colnames(sumTable)[termCols]){#
+  	print(word)#
+  	savedModels[[word]]<-doCosinor(word,pasteBedBugs=FALSE,sumTable, bedbugTerm=bedbugTerm)#
+  	termEstimates<-rbind(termEstimates, getEstimates(savedModels[[word]]$model))#
+  }
+savedModels
+savedModels
+savedModels[[1]]
+savedModels[[12]]
+termEstimates<-rbind(termEstimates, getEstimates(savedModels[[word]]$model))
+termEstimates
+model<-savedModels[[1]]
+model
+getEstimates
+getEstimates(model)
+model
+model$model
+getEstimates
+model[[2]][12]
+model$model[[2]]
+model$model[[2]][12]
+model<-model$model
+COEF<-model[[2]][12]#
+  COEF2<-as.data.frame(COEF)#
+  ESTTREND<-COEF2[2,1]#
+  PTREND<-COEF2[2,4]#
+  STDERR<-COEF2[2,3]
+STDERR
+PTREND
+COEF
+COEF2
+ESTTREND
+model
+names(model)
+names(model$glm)
+names(model$glm)$coefficients
+model$glm
+model$glm[[2]]
+model$glm[[2]][12]
+names(model)
+model$fitted.values
+model[[2]]
+model$glm
+model$glm
+summary(model$glm
+)
+getEstimates
+COEF<-summary(model[[2]])[12]
+COEF
+COEF2<-as.data.frame(COEF)#
+  ESTTREND<-COEF2[2,1]#
+  PTREND<-COEF2[2,4]#
+  STDERR<-COEF2[2,3]
+PTREND
+summary(model$glm)
+summary(model$glm)[12]
+#KEY OUTPUTS#
+## Not working properly#
+getEstimates<-function(model){#
+## AIC<-model[[2]][5]#
+## AIC not being used #
+  COEF<-summary(model$glm)[12]#
+  COEF2<-as.data.frame(COEF)#
+  ESTTREND<-COEF2[2,1]#
+  PTREND<-COEF2[2,4]#
+  STDERR<-COEF2[2,3]#
+  return(c(ESTTREND, PTREND, STDERR))#
+}
+# COSINOR #
+doCosinor<-function(keyword,pasteBedBugs=TRUE,sumTable,dateLimit="2011-01-01", bedbugTerm="bed bugs"){#
+  COLNAMES<-colnames(sumTable)#
+  toSearch<-keyword#
+  if(pasteBedBugs==TRUE){#
+  	toSearch<-paste(bedbugTerm,keyword)#
+  }#
+  COLNUM<-which(COLNAMES==toSearch)#
+  if(length(COLNUM) == 0)#
+  	stop("The specified keyword doesn't exist. Try again.")#
+  date<-as.Date(sumTable$Month,format='%y%m%d')#
+  M<-as.numeric(factor(format(date,'%m')))#
+  Year<-as.numeric(factor(format(date,'%y')))#
+  #set the term being measured to one of the columns#
+  term<-sumTable[,COLNUM]#
+  #create a dataframe with term and M#
+  DATA<-data.frame(term,M)#
+  #limit it to after january 2011#
+  sel<-date>=dateLimit#
+  SELECTEDDATA<-DATA[sel==TRUE,]#
+  SELECTEDDATA$timepoint<-1:length(SELECTEDDATA[,1])#
+  names(SELECTEDDATA)<-c("TERM","MONTH","timepoint")#
+  model<-cosinor(formula=TERM~timepoint,date="MONTH",data=SELECTEDDATA,type="monthly",family=poisson(link="log"))#
+  return(list(model=model, selData=SELECTEDDATA))#
+}#
+#KEY OUTPUTS#
+## Not working properly#
+getEstimates<-function(model){#
+## AIC<-model[[2]][5]#
+## AIC not being used #
+  COEF<-summary(model$glm)[12]#
+  COEF2<-as.data.frame(COEF)#
+  ESTTREND<-COEF2[2,1]#
+  PTREND<-COEF2[2,4]#
+  STDERR<-COEF2[2,3]#
+  return(c(ESTTREND, PTREND, STDERR))#
+}#
+#this will make a basic plot #
+plotCosinor<-function(model, selData){#
+  Y<-selData$Y#
+  MONTH<-selData$MONTH#
+  EST<-model$fitted.plus#
+  plot(Y)#
+  lines(EST)#
+  barplot(Y,space=0,names.arg=MONTH)#
+  lines(EST)#
+}#
+#this function will loop through the table#
+#and compute the p-values and models for every term#
+computeTable<-function(sumTable, bedbugTerm="bed bugs"){#
+  termCols<-which(grepl(bedbugTerm,colnames(sumTable)))#
+  savedModels<-list()#
+  termEstimates<-data.frame()	#
+  for(word in colnames(sumTable)[termCols]){#
+  	print(word)#
+  	savedModels[[word]]<-doCosinor(word,pasteBedBugs=FALSE,sumTable, bedbugTerm=bedbugTerm)#
+  	termEstimates<-rbind(termEstimates, getEstimates(savedModels[[word]]$model))#
+  }#
+  termEstimates <- as.matrix(termEstimates)#
+  colnames(termEstimates) <- c("estimatedTrend", "pValue", "stdError")#
+  rownames(termEstimates) <- colnames(sumTable)[termCols]#
+  return(list(savedModels=savedModels,termEstimates=termEstimates))#
+}
+#save output--check the getEstimates STDERR looks like its the wrong column #
+TRENDESTIMATES<-computeTable(sumTable, bedbugTerm=bedbugTerm)#
+TRENDESTIMATES$termEstimates
+#make the dates work in R#
+#create a month and year variable#
+bedbugTerm = "bed bugs"#
+date<-as.Date(sumTable$Month,format='%y%m%d')#
+M<-as.numeric(factor(format(date,'%m')))#
+Year<-as.numeric(factor(format(date,'%y')))#
+#set term to one of the columns#
+term<-sumTable[,15]#
+#create a dataframe with Y and M#
+DATA<-data.frame(term,M)#
+#limit it to after january 2011#
+sel<-date>="2011-01-01"#
+DATA2<-DATA[sel==TRUE,]#
+DATA2$timepoint<-1:length(DATA2[,1])#
+names(DATA2)<-c("Y","MONTH","timepoint")#
+model<-cosinor(formula=Y~timepoint,date="MONTH",data=DATA2,type="monthly",family=poisson(link = "log"))#
+#set up for cosinor analysis with seasonality on the month and make an ever increasing number for months since start call it timepoint#
+#get column names of the sumTable#
+COLNAMES<-colnames(sumTable)#
+# COSINOR #
+doCosinor<-function(keyword,pasteBedBugs=TRUE,sumTable,dateLimit="2011-01-01", bedbugTerm="bed bugs"){#
+  COLNAMES<-colnames(sumTable)#
+  toSearch<-keyword#
+  if(pasteBedBugs==TRUE){#
+  	toSearch<-paste(bedbugTerm,keyword)#
+  }#
+  COLNUM<-which(COLNAMES==toSearch)#
+  if(length(COLNUM) == 0)#
+  	stop("The specified keyword doesn't exist. Try again.")#
+  date<-as.Date(sumTable$Month,format='%y%m%d')#
+  M<-as.numeric(factor(format(date,'%m')))#
+  Year<-as.numeric(factor(format(date,'%y')))#
+  #set the term being measured to one of the columns#
+  term<-sumTable[,COLNUM]#
+  #create a dataframe with term and M#
+  DATA<-data.frame(term,M)#
+  #limit it to after january 2011#
+  sel<-date>=dateLimit#
+  SELECTEDDATA<-DATA[sel==TRUE,]#
+  SELECTEDDATA$timepoint<-1:length(SELECTEDDATA[,1])#
+  names(SELECTEDDATA)<-c("TERM","MONTH","timepoint")#
+  model<-cosinor(formula=TERM~timepoint,date="MONTH",data=SELECTEDDATA,type="monthly",family=poisson(link="log"))#
+  return(list(model=model, selData=SELECTEDDATA))#
+}#
+#KEY OUTPUTS#
+## Not working properly#
+getEstimates<-function(model){#
+## AIC<-model[[2]][5]#
+## AIC not being used #
+  COEF<-summary(model$glm)[12]#
+  COEF2<-as.data.frame(COEF)#
+  ESTTREND<-COEF2[2,1]#
+  PTREND<-COEF2[2,4]#
+  STDERR<-COEF2[2,3]#
+  return(c(ESTTREND, PTREND, STDERR))#
+}#
+#this will make a basic plot #
+plotCosinor<-function(model, selData){#
+  Y<-selData$Y#
+  MONTH<-selData$MONTH#
+  EST<-model$fitted.plus#
+  plot(Y)#
+  lines(EST)#
+  barplot(Y,space=0,names.arg=MONTH)#
+  lines(EST)#
+}#
+#this function will loop through the table#
+#and compute the p-values and models for every term#
+computeTable<-function(sumTable, bedbugTerm="bed bugs"){#
+  termCols<-which(grepl(bedbugTerm,colnames(sumTable)))#
+  savedModels<-list()#
+  termEstimates<-data.frame()	#
+  for(word in colnames(sumTable)[termCols]){#
+  	print(word)#
+  	savedModels[[word]]<-doCosinor(word,pasteBedBugs=FALSE,sumTable, bedbugTerm=bedbugTerm)#
+  	termEstimates<-rbind(termEstimates, getEstimates(savedModels[[word]]$model))#
+  }#
+  termEstimates <- as.matrix(termEstimates)#
+  colnames(termEstimates) <- c("estimatedTrend", "pValue", "stdError")#
+  rownames(termEstimates) <- colnames(sumTable)[termCols]#
+  return(list(savedModels=savedModels,termEstimates=termEstimates))#
+}#
+#save output--check the getEstimates STDERR looks like its the wrong column #
+TRENDESTIMATES<-computeTable(sumTable, bedbugTerm=bedbugTerm)#
+TRENDESTIMATES$termEstimates#
+#pull in the survey#
+dat<-read.csv("Final_search_term_data.csv")#
+#get rid of blanks at end#
+dat1<-dat[-c(1:3)]#
+dat1<-dat[1:128,c(3:34)]#
+dat1<-dat[1:128,c(1:34)]#
+terms<-names(dat1)#
+terms<-terms[-c(1:4)]#
+##Note changing everything that was 1 and 3 etc to 999 manually)#
+#drop respondants who had 1 zero or 1 unclear response#
+isbad<-dat1[-c(1:4)]==0 | dat1[-c(1:4)]==999#
+numbad<-rowSums(isbad)#
+todrop<-which(numbad>0)  #lines needing dropping#
+dropUser<-dat$User[todrop]#
+droplist<-unique(dropUser)  #will drop 19#
+#drop others who visually saw had all 1s or all 4s etc#
+allbad<-c(13,25)#
+droplist<-c(droplist,allbad)#
+notdrop<-setdiff(1:64,droplist)#
+#makes dat2 dropping all the bad apples#
+dat2 <- dat1#
+for (i in droplist){#
+	dat2<- subset(dat2, dat2$User != i)#
+}#
+#create separate datasets for haves and havenots#
+#keeps 43 participants#
+nothave<-dat2[which(dat2$Have.==0),5:dim(dat2)[2]]#
+have<-dat2[which(dat2$Have.==1),5:dim(dat2)[2]]#
+#New normalization (have-not have)#
+norm<-have-nothave#
+final<-apply(norm,2,mean)#
+sort(final)#
+#===============Tabel 1 #########################
+#meansd<-function(x){#
+#	temp<-mean(x)#
+#	temp2<-sd(x)#
+#	return(c(temp,temp2))#
+#}#
+#table<-apply(have,2,meansd)#
+#sum(have$Symptoms==i)#
+TABLE<-function(x)#
+{#
+	temp<-matrix(NA,30,4)#
+	for(i in 1:4)#
+	{#
+		for (j in 1:30)#
+		{#
+			temp[j,i]<-sum(x[,j]==i)#
+		}#
+	}#
+	return(temp)#
+}#
+THAVE<-TABLE(have)#
+TNOTHAVE<-TABLE(nothave)#
+TABLEALL<-data.frame(names(final), THAVE,TNOTHAVE)#
+names(TABLEALL)<-c("Term",1,2,3,4,1,2,3,4)#
+write.csv(TABLEALL,"TABLEALL.csv")#
+which(names(final)=="Itch")#
+#merge CAREFUL DOUBLE CHECK survey with trends #
+if (bedbugTerm=="bedbugs"){#
+	todrop<-which(names(final)=="Itch")#
+	final<-final[-todrop]#
+	}#
+MERGED<-data.frame(final,TRENDESTIMATES$termEstimates)#
+plot(MERGED$estimatedTrend,MERGED$final,)#
+plot(rank(MERGED$final),rank(MERGED$estimatedTrend))#
+#correlation test#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="spearman")  #doesnt work due to ties#
+#Kendalls tau-b is ok with ties; theres a warning on the output, but I think it can be ignored. #
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall")  #this outputs the tau-b which does work with ties. p-value might be not quite perfect.#
+#the alternative = "greater" is because were doing a one-sided test, we only are looking for a positive association#
+#this is the same as reporting the above with a cutoff of p<.10 though may be easier for readers to digest as people are dumb about pvalues#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall", alternative = "greater")  #
+#plot with terms #
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+text(MERGED$estimatedTrend,MERGED$final,labels=names(final),cex=1/1.4)#
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+jittered<-MERGED$final#
+jittered[13]<-MERGED$final[13]-.025#
+text(MERGED$estimatedTrend,jittered,labels=names(final),cex=1/1.4)#
+#fix names for plot#
+NAMES<-names(final)#
+#alternative lets you identify just some terms, or all of them and avoid overlap--it puts term where you click#
+plot(MERGED$estimatedTrend,MERGED$final,cex=.3,col="grey",xlab="Google Trend", ylab="Interview Score")#
+identify(MERGED$estimatedTrend,MERGED$final,labels=terms)#
+#Michelle's code to get the amplitude & phase along with other parameters#
+getAllPara <- function(keyword){#
+  keyterm <- doCosinor(keyword, pasteBedBugs = TRUE, sumTable, dateLimit = "2011-01-01")#
+  info <- summary(keyterm$model)#
+  keyamp <- info$amp#
+  keyphase <- info$phase#
+  keyintercept <- keyterm$model$glm$coefficients["(Intercept)"]#
+  keytimepoint <- keyterm$model$glm$coefficients["timepoint"]#
+  keycosw <- keyterm$model$glm$coefficients["cosw"]#
+  keysinw <- keyterm$model$glm$coefficients["sinw"]#
+  keylow <- summary(keyterm$model)$lphase#
+  keyAIC <- keyterm$model[[2]]$aic#
+  keyinfo <- c(keyamp, keyphase, keylow, keycosw, keysinw, keytimepoint, keyintercept, keyAIC)#
+  return(keyinfo)#
+}#
+#put parameters into matrix #
+termlist <- strsplit(COLNAMES[-1], " "); termmat <- matrix(,nrow = 30, ncol = 1)#
+for(j in 1:length(COLNAMES[-1])){#
+  termmat[j, 1] <- paste((termlist[[j]])[-(1:2)], collapse = " ")#
+}#
+allterms <- as.character(termmat)#
+para <- c("terms", "amplitude", "phase", "lowpt","cosw", "sinw", "timepoint", "intercept", #
+          "AIC", "est A", "est P")#
+paramat <- matrix(, nrow = 30, ncol = 11)#
+colnames(paramat) <- para#
+paramat[,1] <- allterms#
+for(i in 1:30){#
+  coinf <- getAllPara(paramat[i,1])#
+  coinfmat <- as.matrix(coinf)#
+  paramat[i, 2] <- round(as.numeric(coinfmat[1,1]), digits = 4) #adding amplitude#
+  paramat[i, 3] <- coinfmat[2,1] #adding phase#
+  paramat[i, 4] <- coinfmat[3,1] #adding low point#
+  paramat[i, 5] <- round(as.numeric(coinfmat[4,1]), digits = 4) #adding cosw#
+  paramat[i, 6] <- round(as.numeric(coinfmat[5,1]), digits = 4) #adding sinw#
+  paramat[i, 7] <- round(as.numeric(coinfmat[6,1]), digits = 4) #adding timepoint#
+  paramat[i, 8] <- round(as.numeric(coinfmat[7,1]), digits = 4) #adding intercept#
+  paramat[i, 9] <- round(as.numeric(coinfmat[8,1]), digits = 4) #adding AIC #
+}#
+#in case the estimated amplitudes and phases are also wanted#
+for(i in 1:30){#
+  c <- as.numeric(paramat[i, 5]) #cosw#
+  s <- as.numeric(paramat[i, 6]) #sinw#
+  paramat[i,10] <- round(sqrt((c^2) + (s^2)), digits = 4) #estimating amplitude#
+  estPhase = numeric()#
+  estPhase[i] <- if(c >= 0){  #
+    atan(s/c)#
+  } else {#
+    if (c < 0 & s > 0){#
+      atan(s/c) + pi#
+    } else {#
+      if (c < 0 & s > 0){#
+        atan(s/c) - pi#
+      } else {#
+        (-pi)/6     #I wasn't sure if the first condition also implied that s < 0. #
+      }#
+    }#
+  }#
+  #since phase is on radians scale, transforming to time scale for monthly data#
+  #NOTE: if estP = 0, then conditions for it were not met! See above comment about condition.#
+  paramat[i,11] <- round(12*(estPhase[i]/(2*pi)) + 1, digits = 4)#
+}#
+#View(paramat) #uncomment to see the full matrix of parameters#
+#Code to graph for publication#
+pubtimes <- which(sumTable$Month >= "2011-01-01")#
+pubTable <- sumTable[pubtimes, ] #restricting data to after 2011#
+alltime <- merge(DATA2, pubTable, by = c("row.names")) #merging two data sets so I can get the correct dates#
+alltime <- alltime[,-c(1:2)] #getting rid of unneeded columns#
+alltime <- as.Date(alltime$Month)#
+grabJA <- subset(alltime$Month, format.Date(alltime$Month, "%m")=="01" | format.Date(alltime$Month, "%m")=="08")#
+grabJA <- sort(grabJA, by = "%y")#
+plotdat <- match(alltime$Month, grabJA)#
+plotdate <- which((is.na(plotdat) == FALSE))#
+#enter the six keyterms you want#
+lengthtime<-44#
+keyvector <- c("exterminator", "hotels", "remedies", "city", "images", "about")#
+keymat <- matrix(, nrow = 3*lengthtime, ncol = (length(keyvector)))#
+keyslopes<-NA*1:(length(keyvector))#
+keyints<-NA*1:(length(keyvector))#
+#this saves all the necessary data vectors so we can use them to graph the plots#
+for(i in 1:length(keyvector)){#
+  colnames(keymat) <- keyvector#
+  keyCos <- doCosinor(keyvector[i], pasteBedBugs = TRUE, sumTable, dateLimit = "2011-01-01")#
+  x = keyCos$selData$timepoint#
+  y = keyCos$selData$TERM#
+  z = keyCos$model$fitted.plus#
+  s = keyCos$model$glm$coefficients["timepoint"]#
+  ki = keyCos$model$glm$coefficients["(Intercept)"]#
+  keymat[1:lengthtime,i] <- x#
+  keymat[(lengthtime+1):(lengthtime*2),i] <- y#
+  keymat[(lengthtime*2+1):(lengthtime*3),i] <- z#
+  keyslopes[i]<-s#
+  keyints[i]<-ki#
+}
+#make the dates work in R#
+#create a month and year variable#
+bedbugTerm = "bed bugs"#
+date<-as.Date(sumTable$Month,format='%y%m%d')#
+M<-as.numeric(factor(format(date,'%m')))#
+Year<-as.numeric(factor(format(date,'%y')))#
+#set term to one of the columns#
+term<-sumTable[,15]#
+#create a dataframe with Y and M#
+DATA<-data.frame(term,M)#
+#limit it to after january 2011#
+sel<-date>="2011-01-01"#
+DATA2<-DATA[sel==TRUE,]#
+DATA2$timepoint<-1:length(DATA2[,1])#
+names(DATA2)<-c("Y","MONTH","timepoint")#
+model<-cosinor(formula=Y~timepoint,date="MONTH",data=DATA2,type="monthly",family=poisson(link = "log"))#
+#set up for cosinor analysis with seasonality on the month and make an ever increasing number for months since start call it timepoint#
+#get column names of the sumTable#
+COLNAMES<-colnames(sumTable)#
+# COSINOR #
+doCosinor<-function(keyword,pasteBedBugs=TRUE,sumTable,dateLimit="2011-01-01", bedbugTerm="bed bugs"){#
+  COLNAMES<-colnames(sumTable)#
+  toSearch<-keyword#
+  if(pasteBedBugs==TRUE){#
+  	toSearch<-paste(bedbugTerm,keyword)#
+  }#
+  COLNUM<-which(COLNAMES==toSearch)#
+  if(length(COLNUM) == 0)#
+  	stop("The specified keyword doesn't exist. Try again.")#
+  date<-as.Date(sumTable$Month,format='%y%m%d')#
+  M<-as.numeric(factor(format(date,'%m')))#
+  Year<-as.numeric(factor(format(date,'%y')))#
+  #set the term being measured to one of the columns#
+  term<-sumTable[,COLNUM]#
+  #create a dataframe with term and M#
+  DATA<-data.frame(term,M)#
+  #limit it to after january 2011#
+  sel<-date>=dateLimit#
+  SELECTEDDATA<-DATA[sel==TRUE,]#
+  SELECTEDDATA$timepoint<-1:length(SELECTEDDATA[,1])#
+  names(SELECTEDDATA)<-c("TERM","MONTH","timepoint")#
+  model<-cosinor(formula=TERM~timepoint,date="MONTH",data=SELECTEDDATA,type="monthly",family=poisson(link="log"))#
+  return(list(model=model, selData=SELECTEDDATA))#
+}#
+#KEY OUTPUTS#
+## Not working properly#
+getEstimates<-function(model){#
+## AIC<-model[[2]][5]#
+## AIC not being used #
+  COEF<-summary(model$glm)[12]#
+  COEF2<-as.data.frame(COEF)#
+  ESTTREND<-COEF2[2,1]#
+  PTREND<-COEF2[2,4]#
+  STDERR<-COEF2[2,3]#
+  return(c(ESTTREND, PTREND, STDERR))#
+}#
+#this will make a basic plot #
+plotCosinor<-function(model, selData){#
+  Y<-selData$Y#
+  MONTH<-selData$MONTH#
+  EST<-model$fitted.plus#
+  plot(Y)#
+  lines(EST)#
+  barplot(Y,space=0,names.arg=MONTH)#
+  lines(EST)#
+}#
+#this function will loop through the table#
+#and compute the p-values and models for every term#
+computeTable<-function(sumTable, bedbugTerm="bed bugs"){#
+  termCols<-which(grepl(bedbugTerm,colnames(sumTable)))#
+  savedModels<-list()#
+  termEstimates<-data.frame()	#
+  for(word in colnames(sumTable)[termCols]){#
+  	print(word)#
+  	savedModels[[word]]<-doCosinor(word,pasteBedBugs=FALSE,sumTable, bedbugTerm=bedbugTerm)#
+  	termEstimates<-rbind(termEstimates, getEstimates(savedModels[[word]]$model))#
+  }#
+  termEstimates <- as.matrix(termEstimates)#
+  colnames(termEstimates) <- c("estimatedTrend", "pValue", "stdError")#
+  rownames(termEstimates) <- colnames(sumTable)[termCols]#
+  return(list(savedModels=savedModels,termEstimates=termEstimates))#
+}#
+#save output--check the getEstimates STDERR looks like its the wrong column #
+TRENDESTIMATES<-computeTable(sumTable, bedbugTerm=bedbugTerm)#
+TRENDESTIMATES$termEstimates#
+#pull in the survey#
+dat<-read.csv("Final_search_term_data.csv")#
+#get rid of blanks at end#
+dat1<-dat[-c(1:3)]#
+dat1<-dat[1:128,c(3:34)]#
+dat1<-dat[1:128,c(1:34)]#
+terms<-names(dat1)#
+terms<-terms[-c(1:4)]#
+##Note changing everything that was 1 and 3 etc to 999 manually)#
+#drop respondants who had 1 zero or 1 unclear response#
+isbad<-dat1[-c(1:4)]==0 | dat1[-c(1:4)]==999#
+numbad<-rowSums(isbad)#
+todrop<-which(numbad>0)  #lines needing dropping#
+dropUser<-dat$User[todrop]#
+droplist<-unique(dropUser)  #will drop 19#
+#drop others who visually saw had all 1s or all 4s etc#
+allbad<-c(13,25)#
+droplist<-c(droplist,allbad)#
+notdrop<-setdiff(1:64,droplist)#
+#makes dat2 dropping all the bad apples#
+dat2 <- dat1#
+for (i in droplist){#
+	dat2<- subset(dat2, dat2$User != i)#
+}#
+#create separate datasets for haves and havenots#
+#keeps 43 participants#
+nothave<-dat2[which(dat2$Have.==0),5:dim(dat2)[2]]#
+have<-dat2[which(dat2$Have.==1),5:dim(dat2)[2]]#
+#New normalization (have-not have)#
+norm<-have-nothave#
+final<-apply(norm,2,mean)#
+sort(final)#
+#===============Tabel 1 #########################
+#meansd<-function(x){#
+#	temp<-mean(x)#
+#	temp2<-sd(x)#
+#	return(c(temp,temp2))#
+#}#
+#table<-apply(have,2,meansd)#
+#sum(have$Symptoms==i)#
+TABLE<-function(x)#
+{#
+	temp<-matrix(NA,30,4)#
+	for(i in 1:4)#
+	{#
+		for (j in 1:30)#
+		{#
+			temp[j,i]<-sum(x[,j]==i)#
+		}#
+	}#
+	return(temp)#
+}#
+THAVE<-TABLE(have)#
+TNOTHAVE<-TABLE(nothave)#
+TABLEALL<-data.frame(names(final), THAVE,TNOTHAVE)#
+names(TABLEALL)<-c("Term",1,2,3,4,1,2,3,4)#
+write.csv(TABLEALL,"TABLEALL.csv")#
+which(names(final)=="Itch")#
+#merge CAREFUL DOUBLE CHECK survey with trends #
+if (bedbugTerm=="bedbugs"){#
+	todrop<-which(names(final)=="Itch")#
+	final<-final[-todrop]#
+	}#
+MERGED<-data.frame(final,TRENDESTIMATES$termEstimates)#
+plot(MERGED$estimatedTrend,MERGED$final,)#
+plot(rank(MERGED$final),rank(MERGED$estimatedTrend))#
+#correlation test#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="spearman")  #doesnt work due to ties#
+#Kendalls tau-b is ok with ties; theres a warning on the output, but I think it can be ignored. #
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall")  #this outputs the tau-b which does work with ties. p-value might be not quite perfect.#
+#the alternative = "greater" is because were doing a one-sided test, we only are looking for a positive association#
+#this is the same as reporting the above with a cutoff of p<.10 though may be easier for readers to digest as people are dumb about pvalues#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall", alternative = "greater")  #
+#plot with terms #
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+text(MERGED$estimatedTrend,MERGED$final,labels=names(final),cex=1/1.4)#
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+jittered<-MERGED$final#
+jittered[13]<-MERGED$final[13]-.025#
+text(MERGED$estimatedTrend,jittered,labels=names(final),cex=1/1.4)#
+#fix names for plot#
+NAMES<-names(final)#
+#alternative lets you identify just some terms, or all of them and avoid overlap--it puts term where you click#
+plot(MERGED$estimatedTrend,MERGED$final,cex=.3,col="grey",xlab="Google Trend", ylab="Interview Score")#
+identify(MERGED$estimatedTrend,MERGED$final,labels=terms)#
+#Michelle's code to get the amplitude & phase along with other parameters#
+getAllPara <- function(keyword){#
+  keyterm <- doCosinor(keyword, pasteBedBugs = TRUE, sumTable, dateLimit = "2011-01-01")#
+  info <- summary(keyterm$model)#
+  keyamp <- info$amp#
+  keyphase <- info$phase#
+  keyintercept <- keyterm$model$glm$coefficients["(Intercept)"]#
+  keytimepoint <- keyterm$model$glm$coefficients["timepoint"]#
+  keycosw <- keyterm$model$glm$coefficients["cosw"]#
+  keysinw <- keyterm$model$glm$coefficients["sinw"]#
+  keylow <- summary(keyterm$model)$lphase#
+  keyAIC <- keyterm$model[[2]]$aic#
+  keyinfo <- c(keyamp, keyphase, keylow, keycosw, keysinw, keytimepoint, keyintercept, keyAIC)#
+  return(keyinfo)#
+}#
+#put parameters into matrix #
+termlist <- strsplit(COLNAMES[-1], " "); termmat <- matrix(,nrow = 30, ncol = 1)#
+for(j in 1:length(COLNAMES[-1])){#
+  termmat[j, 1] <- paste((termlist[[j]])[-(1:2)], collapse = " ")#
+}#
+allterms <- as.character(termmat)#
+para <- c("terms", "amplitude", "phase", "lowpt","cosw", "sinw", "timepoint", "intercept", #
+          "AIC", "est A", "est P")#
+paramat <- matrix(, nrow = 30, ncol = 11)#
+colnames(paramat) <- para#
+paramat[,1] <- allterms#
+for(i in 1:30){#
+  coinf <- getAllPara(paramat[i,1])#
+  coinfmat <- as.matrix(coinf)#
+  paramat[i, 2] <- round(as.numeric(coinfmat[1,1]), digits = 4) #adding amplitude#
+  paramat[i, 3] <- coinfmat[2,1] #adding phase#
+  paramat[i, 4] <- coinfmat[3,1] #adding low point#
+  paramat[i, 5] <- round(as.numeric(coinfmat[4,1]), digits = 4) #adding cosw#
+  paramat[i, 6] <- round(as.numeric(coinfmat[5,1]), digits = 4) #adding sinw#
+  paramat[i, 7] <- round(as.numeric(coinfmat[6,1]), digits = 4) #adding timepoint#
+  paramat[i, 8] <- round(as.numeric(coinfmat[7,1]), digits = 4) #adding intercept#
+  paramat[i, 9] <- round(as.numeric(coinfmat[8,1]), digits = 4) #adding AIC #
+}#
+#in case the estimated amplitudes and phases are also wanted#
+for(i in 1:30){#
+  c <- as.numeric(paramat[i, 5]) #cosw#
+  s <- as.numeric(paramat[i, 6]) #sinw#
+  paramat[i,10] <- round(sqrt((c^2) + (s^2)), digits = 4) #estimating amplitude#
+  estPhase = numeric()#
+  estPhase[i] <- if(c >= 0){  #
+    atan(s/c)#
+  } else {#
+    if (c < 0 & s > 0){#
+      atan(s/c) + pi#
+    } else {#
+      if (c < 0 & s > 0){#
+        atan(s/c) - pi#
+      } else {#
+        (-pi)/6     #I wasn't sure if the first condition also implied that s < 0. #
+      }#
+    }#
+  }#
+  #since phase is on radians scale, transforming to time scale for monthly data#
+  #NOTE: if estP = 0, then conditions for it were not met! See above comment about condition.#
+  paramat[i,11] <- round(12*(estPhase[i]/(2*pi)) + 1, digits = 4)#
+}#
+#View(paramat) #uncomment to see the full matrix of parameters#
+#Code to graph for publication#
+pubtimes <- which(sumTable$Month >= "2011-01-01")#
+pubTable <- sumTable[pubtimes, ] #restricting data to after 2011#
+alltime <- merge(DATA2, pubTable, by = c("row.names")) #merging two data sets so I can get the correct dates#
+alltime <- alltime[,-c(1:2)] #getting rid of unneeded columns#
+alltime <- as.Date(alltime$Month)#
+grabJA <- subset(alltime$Month, format.Date(alltime$Month, "%m")=="01" | format.Date(alltime$Month, "%m")=="08")#
+grabJA <- sort(grabJA, by = "%y")#
+plotdat <- match(alltime$Month, grabJA)#
+plotdate <- which((is.na(plotdat) == FALSE))#
+#enter the six keyterms you want#
+lengthtime<-44#
+keyvector <- c("exterminator", "hotels", "remedies", "city", "images", "about")#
+keymat <- matrix(, nrow = 3*lengthtime, ncol = (length(keyvector)))#
+keyslopes<-NA*1:(length(keyvector))#
+keyints<-NA*1:(length(keyvector))#
+#this saves all the necessary data vectors so we can use them to graph the plots#
+for(i in 1:length(keyvector)){#
+  colnames(keymat) <- keyvector#
+  keyCos <- doCosinor(keyvector[i], pasteBedBugs = TRUE, sumTable, dateLimit = "2011-01-01")#
+  x = keyCos$selData$timepoint#
+  y = keyCos$selData$TERM#
+  z = keyCos$model$fitted.plus#
+  s = keyCos$model$glm$coefficients["timepoint"]#
+  ki = keyCos$model$glm$coefficients["(Intercept)"]#
+  keymat[1:lengthtime,i] <- x#
+  keymat[(lengthtime+1):(lengthtime*2),i] <- y#
+  keymat[(lengthtime*2+1):(lengthtime*3),i] <- z#
+  keyslopes[i]<-s#
+  keyints[i]<-ki#
+}
+alltime
+#make the dates work in R#
+#create a month and year variable#
+bedbugTerm = "bed bugs"#
+date<-as.Date(sumTable$Month,format='%y%m%d')#
+M<-as.numeric(factor(format(date,'%m')))#
+Year<-as.numeric(factor(format(date,'%y')))#
+#set term to one of the columns
+#correlation test#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="spearman")  #doesnt work due to ties#
+#Kendalls tau-b is ok with ties; theres a warning on the output, but I think it can be ignored. #
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall")  #this outputs the tau-b which does work with ties. p-value might be not quite perfect.#
+#the alternative = "greater" is because were doing a one-sided test, we only are looking for a positive association#
+#this is the same as reporting the above with a cutoff of p<.10 though may be easier for readers to digest as people are dumb about pvalues#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall", alternative = "greater")
+#correlation test#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="spearman")  #doesnt work due to ties#
+#Kendalls tau-b is ok with ties; theres a warning on the output, but I think it can be ignored. #
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall")  #this outputs the tau-b which does work with ties. p-value might be not quite perfect.#
+#the alternative = "greater" is because were doing a one-sided test, we only are looking for a positive association#
+#this is the same as reporting the above with a cutoff of p<.10 though may be easier for readers to digest as people are dumb about pvalues#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="kendall", alternative = "greater")
+MERGED<-data.frame(final,TRENDESTIMATES$termEstimates)#
+plot(MERGED$estimatedTrend,MERGED$final,)
+plot(rank(MERGED$final),rank(MERGED$estimatedTrend))
+MERGED$final
+MERGED$estimatedTrend
+#correlation test#
+cor.test(MERGED$final,MERGED$estimatedTrend, method="spearman")  #doesnt work due to ties#
+#Kendalls tau-b is ok with ties; theres a warning on the output, but I think it can be ignored.
+#plot with terms #
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+text(MERGED$estimatedTrend,MERGED$final,labels=names(final),cex=1/1.4)
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+jittered<-MERGED$final#
+jittered[13]<-MERGED$final[13]-.025#
+text(MERGED$estimatedTrend,jittered,labels=names(final),cex=1/1.4)
+#fix names for plot#
+NAMES<-names(final)#
+#alternative lets you identify just some terms, or all of them and avoid overlap--it puts term where you click#
+plot(MERGED$estimatedTrend,MERGED$final,cex=.3,col="grey",xlab="Google Trend", ylab="Interview Score")#
+identify(MERGED$estimatedTrend,MERGED$final,labels=terms)
+#plot with terms #
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+text(MERGED$estimatedTrend,MERGED$final,labels=names(final),cex=1/1.4)
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+jittered<-MERGED$final#
+jittered[13]<-MERGED$final[13]-.025#
+text(MERGED$estimatedTrend,jittered,labels=names(final),cex=1/1.4)
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")#
+jittered<-MERGED$final#
+jittered[13]<-MERGED$final[13]-.025#
+text(MERGED$estimatedTrend,jittered,labels=names(final),cex=1/1.4)#
+#fix names for plot#
+NAMES<-names(final)
+#plot rank with terms#
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+plot(rank(MERGED$estimatedTrend),rank(MERGED$final),col=0,xlab="Google Trend Ranking", ylab="Interview Score Ranking")#
+text(rank(MERGED$estimatedTrend),rank(MERGED$final),labels=names(final),cex=1/1.4)
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+jittered<-MERGED$final#
+jittered[13]<-MERGED$final[13]-.025#
+plot(rank(MERGED$estimatedTrend),rank(MERGED$final),col=0,xlab="Google Trend Ranking", ylab="Interview Score Ranking")#
+text(rank(MERGED$estimatedTrend),rank(MERGED$final),labels=names(final),cex=1/1.4)
+lines(0:30,0:30,type="dotted")
+lines(0:30,0:30)
+?lines
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)#
+lines(0:30,0:30,type=d)
+?lines
+findFn
+findfn
+Findfn
+findFn
+library("sos")
+install.packages("sos")
+findFn("{generalized estimating equation}")
+findFn
+findfn
+Findfn
+findFn("{generalized estimating equation}")

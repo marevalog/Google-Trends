@@ -209,6 +209,16 @@ par(mfrow=c(1,1),cex=1.4, cex.axis=1)
 plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")
 text(MERGED$estimatedTrend,MERGED$final,labels=names(final),cex=1/1.4)
 
+#plot rank with terms
+par(mfrow=c(1,1),cex=1.4, cex.axis=1)
+lines(0:30,0:30,type=d)
+jittered<-MERGED$final
+jittered[13]<-MERGED$final[13]-.025
+plot(rank(MERGED$estimatedTrend),rank(MERGED$final),col=0,xlab="Google Trend Ranking", ylab="Interview Score Ranking")
+text(rank(MERGED$estimatedTrend),rank(MERGED$final),labels=names(final),cex=1/1.4)
+
+
+
 par(mfrow=c(1,1),cex=1.4, cex.axis=1)
 plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")
 jittered<-MERGED$final
