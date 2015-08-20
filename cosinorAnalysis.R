@@ -19,10 +19,13 @@ bedbugTerm = "bed bugs"
 date<-as.Date(sumTable$Month,format='%y%m%d')
 M<-as.numeric(factor(format(date,'%m')))
 Year<-as.numeric(factor(format(date,'%y')))
+
 #set term to one of the columns
 term<-sumTable[,15]
+
 #create a dataframe with Y and M
 DATA<-data.frame(term,M)
+
 #limit it to after january 2011
 sel<-date>="2011-01-01"
 DATA2<-DATA[sel==TRUE,]
@@ -209,21 +212,14 @@ par(mfrow=c(1,1),cex=1.4, cex.axis=1)
 plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")
 text(MERGED$estimatedTrend,MERGED$final,labels=names(final),cex=1/1.4)
 
-#plot rank with terms
-par(mfrow=c(1,1),cex=1.4, cex.axis=1)
-lines(0:30,0:30,type=d)
-jittered<-MERGED$final
-jittered[13]<-MERGED$final[13]-.025
+#New version of Figure 3--plot rank with terms
+pdf(file="Rank_Fig_3.pdf", width=5, height=5)
+par(mfrow=c(1,1),cex=1, cex.axis=1)
 plot(rank(MERGED$estimatedTrend),rank(MERGED$final),col=0,xlab="Google Trend Ranking", ylab="Interview Score Ranking")
+abline(v=15,lty="dotted")
+abline(h=15,lty="dotted")
 text(rank(MERGED$estimatedTrend),rank(MERGED$final),labels=names(final),cex=1/1.4)
-
-
-
-par(mfrow=c(1,1),cex=1.4, cex.axis=1)
-plot(MERGED$estimatedTrend,MERGED$final,col=0,xlab="Google Trend", ylab="Interview Score")
-jittered<-MERGED$final
-jittered[13]<-MERGED$final[13]-.025
-text(MERGED$estimatedTrend,jittered,labels=names(final),cex=1/1.4)
+dev.off()
 
 #fix names for plot
 NAMES<-names(final)
