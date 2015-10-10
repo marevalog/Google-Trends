@@ -62,7 +62,7 @@ for(intent in classesNums){
     lines(sumTable[,1],toPlotNorm[,iTerm])
   }
 
-  # smooth# smooth
+  # smooth # smooth
   nF<- 11
   toPlotSmooth <- apply(toPlotNorm,2,filter,rep(1/nF,nF))
   # plot smoothed
