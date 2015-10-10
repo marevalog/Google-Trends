@@ -5,6 +5,7 @@
 # #  and to reload:
 # reload(termsFromTxt) ; from termsFromTxt import *
 # need pyGTrends.py in same directory to run
+# if using python, will not work on versiosn higher than 2
 
 import sys
 sys.path.append("google-trend-api")
