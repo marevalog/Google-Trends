@@ -8,11 +8,7 @@ setwd("~/GitHub/Google-Trends")
 # GNU current version
 
 # retrieve the terms
-#initial list
-#secondaryTerms <- read.csv("termsList.txt",header=FALSE,as.is=TRUE)[,1]
-#extended list (Autocomplete+Correlate)
-#secondaryTerms <- read.csv("termsList2.txt",header=FALSE,as.is=TRUE)[,1]
-
+# from termsList.txt
 secondaryTerms <- read.csv("termsList.txt",header=FALSE,as.is=TRUE)[,1]
 
 #pest comparison
@@ -45,7 +41,7 @@ for(iRequest in 1:nRequest){
   }
 }
 
-# save requests as different files
+# save requests as different file
 for(iRequest in 1:nRequest){
   fileName <- paste0(requestsFolder,"/request",secondaryTerms[iRequest],".txt")
   write.table(file=fileName,requests[[iRequest]],row.names=FALSE,col.names=FALSE,quote=FALSE)
