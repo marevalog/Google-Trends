@@ -35,7 +35,7 @@ ImportOutTrends <- function(outTrendsFolder,patternFiles="google_report.csv$"){
   return(list(geo=geo,date=period,search=request,oc=occurences))
 }
 
-# format the times
+# format the times to standard mode
 TimeFromOutTrends <- function(dat,datCol=1){
   nameDatCol <- names(dat)[datCol]
   # cat("nameDatCol:",nameDatCol,"\n")
@@ -48,7 +48,7 @@ TimeFromOutTrends <- function(dat,datCol=1){
   return(beginTimes)
 }
 
-# if the time step is the week, change it to the month
+# if the time step is the week, change it to the month and format dates
 GetDatByMonth<-function(dat,datCol=1){
   nameDatCol <- names(dat)[datCol]
   # make sure everything is in right format
@@ -71,6 +71,7 @@ GetDatByMonth<-function(dat,datCol=1){
     initTime <- min(times)
     endTime <- max(times)
 
+    #determine where month begins
     initMonth <-initTime
     day(initMonth) <- 1
     
